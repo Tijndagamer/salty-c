@@ -1,5 +1,5 @@
 /*
- * pubkey.c
+ * file_encrypt.c
  *
  * Usage:
  * ./pubkey keygen
@@ -50,6 +50,7 @@ int gen_keyfiles(void)
 
 /*
  * Encrypt msg for recipient's public key and sign with our secret key.
+ * Prints the ciphertext in hexadecimals.
  */
 int encrypt_msg(char *sk_file, char *pk_file, char *msg)
 {
@@ -83,10 +84,31 @@ int encrypt_msg(char *sk_file, char *pk_file, char *msg)
     if (crypto_box_easy(ciphertext, msg, msglen, nonce, pk, sk) != 0)
        error(-1, errno, "Encryption failed");
 
+    /*
+     * TODO
+     * Find a better output format. Maybe something similar to what gpg does
+     * with ASCII armor?
+     *
+     * This is where I got bored of this project. Maybe I'll pick it up later.
+     */
+
     for (int i = 0; i < ciphertext_len; i++)
         printf("%02x", ciphertext[i]);
+    printf("\nnonce:");
+    for (int i = 0; i < crypto_box_NONCEBYTES; i++)
+        printf("%02x", nonce[i]);
     printf("\n");
 
+    printf("raw\nciphertext: %s\n nonce: %s\n", ciphertext, nonce);
+
+    return 0;
+}
+
+/*
+ * Decrypt a hexadecimal ciphertext as produced by encrypt_msg
+ */
+int decrypt_msg(char *sk_file, char *ciphertext, int nonce)
+{
     return 0;
 }
 
