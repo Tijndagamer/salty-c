@@ -31,6 +31,7 @@
 // Networking
 #include <sys/socket.h>
 #include <netdb.h>
+#include <arpa/inet.h>
 
 #include <string.h>
 
@@ -134,15 +135,90 @@ int client(char *host, char *port)
 
     n = getaddrinfo(host, port, &hints, &res);
     if (n != 0)
-        error(-1, 0, "Error getting address: %d", gai_strerror(n));
+        error(-1, 0, "Error getting address: %s", gai_strerror(n));
 
     sockfd = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
     if (sockfd == -1)
         error(-1, errno, "Error opening socket");
 
     printf("Connecting to %s:%s...", host, port);
-    if (connect(sockfd, res->ai_addr, res->socklen_t) == -1)
+    if (connect(sockfd, res->ai_addr, res->ai_addrlen) == -1)
         error(-1, errno, "Error connecting to %s:%s", host, port);
+    printf("done\n");
+
+    // Connection is set up; now exchange public keys
+    n = 0;
+    n = read(sockfd, s_pk, crypto_box_PUBLICKEYBYTES);
+	if (n == -1) {
+        error(-1, errno, "Error receiving server's public key");
+    } /* Add case when -1 < n < crypto_box_PUBLICKEYBYTES */
+
+	n = 0;
+	do {
+		n = write(sockfd, c_pk, crypto_box_PUBLICKEYBYTES - n);
+	} while (n > 0 && n < crypto_box_PUBLICKEYBYTES);
+}
+
+int server(char *port)
+{
+    int sockfd, conn_sockfd;
+    int client_len;
+    int n;
+    char client_ip[INET_ADDRSTRLEN];
+    struct sockaddr_in cl_addr;
+    struct addrinfo hints, *res;
+
+    unsigned char s_pk[crypto_box_PUBLICKEYBYTES];
+    unsigned char s_sk[crypto_box_SECRETKEYBYTES];
+    unsigned char c_pk[crypto_box_PUBLICKEYBYTES];
+    unsigned char nonce[crypto_box_NONCEBYTES];
+
+    read_keyfiles(s_sk, sizeof s_sk, s_pk, sizeof s_pk);
+
+    memset(&hints, 0, sizeof hints);
+    hints.ai_family = AF_INET;
+    hints.ai_socktype = SOCK_STREAM;
+    hints.ai_flags = AI_PASSIVE;
+
+    n = getaddrinfo(NULL, port, &hints, &res);
+    if (n != 0)
+        error(-1, 0, "Error in getaddrinfo: %s", gai_strerror(n));
+
+    sockfd = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
+    if (sockfd == -1)
+        error(-1, errno, "Error opening socket");
+
+    if (bind(sockfd, res->ai_addr, res->ai_addrlen) == -1)
+        error(-1, errno, "Error binding socket");
+
+    if (listen(sockfd, 5) == -1)
+        error(-1, errno, "Error listening");
+
+    char buf[BUFSIZE];
+    while (1) {
+        memset(buf, 0, sizeof buf);
+        client_len = sizeof cl_addr;
+
+        conn_sockfd = accept(sockfd, (struct sockaddr *) &cl_addr, &client_len);
+        if (conn_sockfd == -1)
+            error(-1, errno, "Error accepting connection");
+
+        inet_ntop(AF_INET, &(cl_addr.sin_addr), client_ip, sizeof client_ip);
+        printf("Accepted connection from %s:%d\n", client_ip, cl_addr.sin_port);
+
+        /*
+         * Should verify if there hasn't been tampered with the pubkeys
+         */
+        n = 0;
+        do {
+            n = write(conn_sockfd, s_pk, crypto_box_PUBLICKEYBYTES - n);
+        } while (n > 0 && n < crypto_box_PUBLICKEYBYTES);
+
+        n = 0;
+        n = read(conn_sockfd, c_pk, crypto_box_PUBLICKEYBYTES);
+
+        // Keys have been exchanged, now we can talk!
+    }
 }
 
 int main(int argc, char *argv[])
