@@ -120,6 +120,13 @@ int client(char *host, char *port)
     struct hostent *server;
     struct addrinfo hints, *res;
 
+    unsigned char c_pk[crypto_box_PUBLICKEYBYTES];
+    unsigned char c_sk[crypto_box_SECRETKEYBYTES];
+    unsigned char s_pk[crypto_box_PUBLICKEYBYTES];
+    unsigned char nonce[crypto_box_NONCEBYTES];
+
+    read_keyfiles(c_sk, sizeof c_sk, c_pk, sizeof c_pk);
+
     memset(&hints, 0, sizeof hints);
     hints.ai_family = AF_INET;
     hints.ai_socktype = SOCK_STREAM;
