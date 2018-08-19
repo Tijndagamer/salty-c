@@ -77,13 +77,39 @@ int gen_keyfiles(void)
     return 0;
 }
 
+int read_keyfiles(char *sk, size_t skl, char *pk, size_t pkl)
+{
+    int fd, n;
+
+    fd = open("sk", O_RDONLY);
+    if (fd == -1)
+        error(-1, errno, "Can't open secret key file");
+
+    n = read(fd, sk, skl);
+    if (n == -1)
+        error(-1, errno, "Cant read secret key");
+    close(fd);
+    /* Todo: catch case when the key isn't read completely (-1 < n < skl) */
+
+    fd = open("pk", O_RDONLY);
+    if (fd == -1)
+        error(-1, errno, "Can't open public key file");
+
+    n = read(fd, pk, pkl);
+    if (n == -1)
+        error(-1, errno, "Can't read public key");
+    close(fd);
+
+    return 0;
+}
+
 /*
  *
  *
 int encrypt_msg(unsigned char sk[], unsigned char pk[], char m[], size_t mlen,
         char buf[], size_t buflen, )
 {
-    
+
 }
 */
 
