@@ -254,10 +254,18 @@ int main(int argc, char *argv[])
     }
 
     if (argc < 2)
-        return -2;
+        error(-1, 0, "No arguments specified");
 
     if (strcmp("keygen", argv[1]) == 0) {
         return gen_keyfiles();
+    } else if (strcmp("client", argv[1]) == 0) {
+        if (argc < 4)
+            error(-1, 0, "Please suplly a host and a port number");
+        client(argv[2], argv[3]);
+    } else if (strcmp("server", argv[1]) == 0) {
+        if (argc < 3)
+            error(-1, 0, "Please supply a port number");
+        server(argv[2]);
     }
 
     return 0;
