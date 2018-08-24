@@ -104,16 +104,6 @@ int read_keyfiles(char *sk, size_t skl, char *pk, size_t pkl)
     return 0;
 }
 
-/*
- *
- *
-int encrypt_msg(unsigned char sk[], unsigned char pk[], char m[], size_t mlen,
-        char buf[], size_t buflen, )
-{
-
-}
-*/
-
 int client(char *host, char *port)
 {
     int sockfd, n;
@@ -124,7 +114,6 @@ int client(char *host, char *port)
     unsigned char c_pk[crypto_box_PUBLICKEYBYTES];
     unsigned char c_sk[crypto_box_SECRETKEYBYTES];
     unsigned char s_pk[crypto_box_PUBLICKEYBYTES];
-    unsigned char nonce[crypto_box_NONCEBYTES];
 
     read_keyfiles(c_sk, sizeof c_sk, c_pk, sizeof c_pk);
 
@@ -147,6 +136,7 @@ int client(char *host, char *port)
     printf("done\n");
 
     // Connection is set up; now exchange public keys
+    printf("Exchanging keys... ");
     n = 0;
     n = read(sockfd, s_pk, crypto_box_PUBLICKEYBYTES);
 	if (n == -1) {
@@ -157,6 +147,23 @@ int client(char *host, char *port)
 	do {
 		n = write(sockfd, c_pk, crypto_box_PUBLICKEYBYTES - n);
 	} while (n > 0 && n < crypto_box_PUBLICKEYBYTES);
+    printf("succes\n");
+
+    char buf[BUFSIZE];
+    printf("> ");
+    fgets(buf, sizeof buf, stdin);
+
+    unsigned char nonce[crypto_box_NONCEBYTES];
+    randombytes_buf(nonce, sizeof nonce);
+
+    size_t ciphertext_len = BUFSIZE + crypto_box_MACBYTES;
+    char ciphertext[ciphertext_len];
+
+    if (crypto_box_easy(ciphertext, buf, sizeof buf, nonce, s_pk, c_sk) != 0)
+        error(-1, errno, "Failed to encrypt message");
+
+    write(sockfd, nonce, sizeof nonce);
+    write(sockfd, ciphertext, sizeof ciphertext);
 }
 
 int server(char *port)
@@ -171,7 +178,6 @@ int server(char *port)
     unsigned char s_pk[crypto_box_PUBLICKEYBYTES];
     unsigned char s_sk[crypto_box_SECRETKEYBYTES];
     unsigned char c_pk[crypto_box_PUBLICKEYBYTES];
-    unsigned char nonce[crypto_box_NONCEBYTES];
 
     read_keyfiles(s_sk, sizeof s_sk, s_pk, sizeof s_pk);
 
@@ -194,6 +200,8 @@ int server(char *port)
     if (listen(sockfd, 5) == -1)
         error(-1, errno, "Error listening");
 
+    printf("Waiting for a connection...\n");
+
     char buf[BUFSIZE];
     while (1) {
         memset(buf, 0, sizeof buf);
@@ -209,6 +217,7 @@ int server(char *port)
         /*
          * Should verify if there hasn't been tampered with the pubkeys
          */
+        printf("Exchanging keys... ");
         n = 0;
         do {
             n = write(conn_sockfd, s_pk, crypto_box_PUBLICKEYBYTES - n);
@@ -216,8 +225,25 @@ int server(char *port)
 
         n = 0;
         n = read(conn_sockfd, c_pk, crypto_box_PUBLICKEYBYTES);
+        if (n == -1)
+            error(-1, errno, "Error receiving client's public key");
+
+        printf("succes\n");
 
         // Keys have been exchanged, now we can talk!
+
+        unsigned char nonce[crypto_box_NONCEBYTES];
+        unsigned char ciphertext_buf[BUFSIZE + crypto_box_MACBYTES];
+
+        read(conn_sockfd, nonce, sizeof nonce);
+        read(conn_sockfd, ciphertext_buf, sizeof ciphertext_buf);
+
+        unsigned char msg[BUFSIZE];
+        if (crypto_box_open_easy(msg, ciphertext_buf, sizeof ciphertext_buf,
+                    nonce, c_pk, s_sk) != 0)
+            error(-1, errno, "Failed to decrypt message");
+
+        printf("%s\n", msg);
     }
 }
 
